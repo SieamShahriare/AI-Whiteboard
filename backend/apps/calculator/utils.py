@@ -1,31 +1,3 @@
-# import torch
-# from transformers import pipeline, BitsAndBytesConfig, AutoProcessor, LlavaForConditionalGeneration
-# from PIL import Image
-
-# # quantization_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)
-# quantization_config = BitsAndBytesConfig(
-#     load_in_4bit=True,
-#     bnb_4bit_compute_dtype=torch.float16
-# )
-
-
-# model_id = "llava-hf/llava-1.5-7b-hf"
-# processor = AutoProcessor.from_pretrained(model_id)
-# model = LlavaForConditionalGeneration.from_pretrained(model_id, quantization_config=quantization_config, device_map="auto")
-# # pipe = pipeline("image-to-text", model=model_id, model_kwargs={"quantization_config": quantization_config})
-
-# def analyze_image(image: Image):
-#     prompt = "USER: <image>\nAnalyze the equation or expression in this image, and return answer in format: {expr: given equation in LaTeX format, result: calculated answer}"
-
-#     inputs = processor(prompt, images=[image], padding=True, return_tensors="pt").to("cuda")
-#     for k, v in inputs.items():
-#         print(k,v.shape)
-
-#     output = model.generate(**inputs, max_new_tokens=20)
-#     generated_text = processor.batch_decode(output, skip_special_tokens=True)
-#     for text in generated_text:
-#         print(text.split("ASSISTANT:")[-1])
-
 import google.generativeai as genai
 import ast
 import json
@@ -60,6 +32,10 @@ def analyze_image(img: Image, dict_of_vars: dict):
         f"Here is a dictionary of user-assigned variables. If the given expression has any of these variables, use its actual value from this dictionary accordingly: {dict_of_vars_str}. "
         f"DO NOT USE BACKTICKS OR MARKDOWN FORMATTING. "
         f"PROPERLY QUOTE THE KEYS AND VALUES IN THE DICTIONARY FOR EASIER PARSING WITH Python's ast.literal_eval."
+        f"IMPORTANT: Return all mathematical expressions in LaTeX format:\n"
+        f"- Inline math with single dollar signs: $x^2 + y^2 = z^2$\n"
+        f"- Display math with double dollar signs: $$\\frac{1}{2}$$\n"
+        f"- Use proper LaTeX notation for all symbols\n"
     )
     response = model.generate_content([prompt, img])
     print(response.text)
@@ -75,3 +51,63 @@ def analyze_image(img: Image, dict_of_vars: dict):
         else:
             answer['assign'] = False
     return answers
+    
+
+def get_explanation(img: Image, question: str, history: list[dict]):
+    model = genai.GenerativeModel(model_name="gemini-2.5-flash")
+    
+    # Build chat history
+    chat = model.start_chat(history=[])
+    for msg in history:
+        if msg['role'] == 'user':
+            chat.send_message(msg['content'])
+        else:
+            chat.send_message(msg['content'])
+    
+    # prompt = (
+    #     f"Provide a detailed step-by-step explanation for this problem.\n"
+    #     f"Requirements:\n"
+    #     f"- Use clear mathematical notation\n"
+    #     f"- Format LaTeX equations with $ for inline and $$ for display\n"
+    #     f"- Separate steps with newlines\n"
+    #     f"- Keep explanations concise but complete\n"
+    #     f"- Reference the image when appropriate\n\n"
+    #     f"User's question: {question}\n\n"
+    #     f"Explain the solution:"
+    # )
+
+    prompt = (
+        "Provide a detailed step-by-step mathematical explanation with the following strict formatting rules:\n\n"
+        "1. STRUCTURE REQUIREMENTS:\n"
+        "- Begin with a clear statement of the problem\n"
+        "- Use numbered steps for each part of the solution\n"
+        "- End with a clear final answer\n"
+        "- Separate steps with blank lines for readability\n\n"
+        "2. MATHEMATICAL NOTATION:\n"
+        "- For inline math: wrap with single dollar signs like $x^2$\n"
+        "- For display math: wrap with double dollar signs like $$\\int f(x) dx$$\n"
+        "- Always escape special characters (e.g., tan^{-1} not tan^-1)\n"
+        "- Use proper LaTeX notation for all symbols\n\n"
+        "3. CONTENT REQUIREMENTS:\n"
+        "- Explain each transformation clearly\n"
+        "- Show intermediate steps\n"
+        "- Highlight key mathematical rules used\n"
+        "- Keep technical language precise but accessible\n\n"
+        "4. FORMAT EXAMPLE:\n"
+        "To solve the integral $$\\int \\tan^{-1}(x) \\, dx$$, we use integration by parts.\n\n"
+        "**Step 1: Choose u and dv.**\n"
+        "Let $u = \\tan^{-1}(x)$\n"
+        "Let $dv = dx$\n\n"
+        "**Step 2: Differentiate and integrate.**\n"
+        "$$du = \\frac{1}{1+x^2} dx$$\n"
+        "$$v = x$$\n\n"
+        "[...additional steps...]\n\n"
+        "The final result is:\n"
+        "$$\\int \\tan^{-1}(x) \\, dx = x \\tan^{-1}(x) - \\frac{1}{2}\\ln(1+x^2) + C$$\n\n"
+        "Now explain this problem:\n"
+        f"User's question: {question}"
+    )
+    
+    response = chat.send_message([prompt, img])
+    return response.text
+

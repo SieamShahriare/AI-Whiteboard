@@ -3,6 +3,7 @@ import { ColorSwatch, Group } from "@mantine/core";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
 import { SWATCHES } from "./constants";
+import LatexRenderer from '@/components/LatexRenderer';
 
 interface Response {
   expr: string;
@@ -22,6 +23,11 @@ interface Action {
   lines: Line[];
 }
 
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -35,6 +41,12 @@ export default function Home() {
   >([]);
   const [lastPos, setLastPos] = useState<{ x: number; y: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [explanation, setExplanation] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [userQuestion, setUserQuestion] = useState("");
+  const [isExplaining, setIsExplaining] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -260,9 +272,82 @@ export default function Home() {
     }
   };
 
-  return (
+
+    const getExplanation = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas || isLoading) return;
+
+    setIsExplaining(true);
+    setSidebarOpen(true);
+
+    try {
+      const response = await axios({
+        method: "post",
+        url: "http://localhost:8900/calculate/explain",
+        data: {
+          image: canvas.toDataURL("image/png"),
+          question: "Explain the solution to this problem",
+          history: chatMessages,
+        },
+      });
+
+      const newMessage: ChatMessage = {
+        role: 'assistant',
+        content: response.data.data
+      };
+
+      setChatMessages(prev => [...prev, newMessage]);
+      setExplanation(response.data.data);
+    } catch (error) {
+      console.error("Error getting explanation:", error);
+    } finally {
+      setIsExplaining(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!userQuestion.trim()) return;
+
+    const newUserMessage: ChatMessage = {
+      role: 'user',
+      content: userQuestion
+    };
+    setChatMessages(prev => [...prev, newUserMessage]);
+    setUserQuestion("");
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    setIsExplaining(true);
+    setSidebarOpen(true);
+    try {
+      const response = await axios({
+        method: "post",
+        url: "http://localhost:8900/calculate/explain",
+        data: {
+          image: canvas.toDataURL("image/png"),
+          question: userQuestion,
+          history: [...chatMessages, newUserMessage],
+        },
+      });
+
+      const newAssistantMessage: ChatMessage = {
+        role: 'assistant',
+        content: response.data.data
+      };
+      setChatMessages(prev => [...prev, newAssistantMessage]);
+      setExplanation(response.data.data);
+      console.log(explanation);
+    } catch (error) {
+      console.error("Error in chat:", error);
+    } finally {
+      setIsExplaining(false);
+    }
+  };
+
+return (
     <div className="min-h-screen bg-gray-50">
-        {isLoading && (
+      {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg flex flex-col items-center">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
@@ -270,63 +355,127 @@ export default function Home() {
           </div>
         </div>
       )}
-      <div className="container mx-auto px-4 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={clear}
-              className="bg-white text-gray-800 hover:bg-gray-100 border border-gray-300 shadow-sm"
-              disabled={isLoading}
-              variant="outline"
-            >
-              <span className="font-medium">Clear Canvas</span>
-            </Button>
-            <Button
-              onClick={undo}
-              className="bg-white text-gray-800 hover:bg-gray-100 border border-gray-300 shadow-sm"
-              variant="outline"
-              disabled={isLoading}
-            >
-              <span className="font-medium">Undo</span>
-              <span className="ml-2 text-xs text-gray-500">(Ctrl+Z)</span>
-            </Button>
-          </div>
+      <div className="container mx-auto px-4 py-4 flex">
+        {/* Main content */}
+        <div className="flex-1 mr-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={clear}
+                className="bg-white text-gray-800 hover:bg-gray-100 border border-gray-300 shadow-sm"
+                disabled={isLoading}
+                variant="outline"
+              >
+                <span className="font-medium">Clear Canvas</span>
+              </Button>
+              <Button
+                onClick={undo}
+                className="bg-white text-gray-800 hover:bg-gray-100 border border-gray-300 shadow-sm"
+                variant="outline"
+                disabled={isLoading}
+              >
+                <span className="font-medium">Undo</span>
+                <span className="ml-2 text-xs text-gray-500">(Ctrl+Z)</span>
+              </Button>
+              <Button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="bg-white text-gray-800 hover:bg-gray-100 border border-gray-300 shadow-sm"
+                variant="outline"
+                disabled={isLoading}
+              >
+                <span className="font-medium">{sidebarOpen ? "Hide" : "Show"} Explanation</span>
+              </Button>
+            </div>
 
-          <Group>
-            {SWATCHES.map((swatch) => (
-              <ColorSwatch
-                key={swatch}
-                color={swatch}
-                onClick={() => setColor(swatch)}
-                className="cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-gray-400 transition-all"
-                size={28}
-              />
-            ))}
-          </Group>
+            <Group>
+              {SWATCHES.map((swatch) => (
+                <ColorSwatch
+                  key={swatch}
+                  color={swatch}
+                  onClick={() => setColor(swatch)}
+                  className="cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-gray-400 transition-all"
+                  size={28}
+                />
+              ))}
+            </Group>
 
-          <Button
-            onClick={runRoute}
-            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-            disabled={isLoading}
-            >
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={getExplanation}
+                className="bg-green-600 hover:bg-green-700 text-white shadow-sm"
+                disabled={isLoading || isExplaining}
+              >
                 <span className="font-medium">
-                    {isLoading ? "Calculating..." : "Calculate"}
+                  {isExplaining ? "Generating..." : "Explain"}
+                </span>
+              </Button>
+              <Button
+                onClick={runRoute}
+                className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                disabled={isLoading}
+              >
+                <span className="font-medium">
+                  {isLoading ? "Calculating..." : "Calculate"}
                 </span>
                 <span className="ml-2 text-xs text-blue-100">(Enter)</span>
-            </Button>   
+              </Button>
+            </div>
+          </div>
+
+          <div className="relative bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <canvas
+              ref={canvasRef}
+              id="canvas"
+              className="w-full h-[calc(100vh-180px)]"
+              onMouseDown={startDrawing}
+              onMouseMove={draw}
+              onMouseUp={stopDrawing}
+              onMouseOut={stopDrawing}
+            />
+          </div>
         </div>
 
-        <div className="relative bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <canvas
-            ref={canvasRef}
-            id="canvas"
-            className="w-full h-[calc(100vh-180px)]"
-            onMouseDown={startDrawing}
-            onMouseMove={draw}
-            onMouseUp={stopDrawing}
-            onMouseOut={stopDrawing}
-          />
-        </div>
+        {/* Sidebar */}
+        {sidebarOpen && (
+
+          <div className="w-96 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col" 
+              style={{ height: 'calc(100vh - 180px)' }}>
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="font-semibold text-lg">Explanation</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {explanation ? (
+                <div className="prose max-w-none">
+                  <LatexRenderer content={explanation} />
+                </div>
+              ) : (
+                <p className="text-gray-500">Click "Explain" to get an explanation of the solution</p>
+              )}
+            </div>
+    
+
+            {/* Chat interface - stays fixed at the bottom */}
+            <div className="p-4 border-t border-gray-200">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={userQuestion}
+                  onChange={(e) => setUserQuestion(e.target.value)}
+                  placeholder="Ask about the solution..."
+                  className="flex-1 border border-gray-300 rounded px-3 py-2"
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                />
+                <Button
+                  onClick={handleSendMessage}
+                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                  disabled={isExplaining}
+                >
+                  Send
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

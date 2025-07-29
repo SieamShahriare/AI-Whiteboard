@@ -1,9 +1,8 @@
 import {createBrowserRouter, RouterProvider} from 'react-router-dom';
 import '@mantine/core/styles.css';
 import { MantineProvider } from '@mantine/core';
-
+import { MathJaxContext } from 'better-react-mathjax';
 import Home from '@/screens/home';
-
 import '@/index.css';
 
 const paths = [
@@ -20,7 +19,9 @@ const BrowserRouter = createBrowserRouter(paths);
 const App = () => {
     return (
     <MantineProvider>
-      <RouterProvider router={BrowserRouter}/>
+      <MathJaxContext>
+        <RouterProvider router={BrowserRouter}/>
+      </MathJaxContext>
     </MantineProvider>
     )
 };

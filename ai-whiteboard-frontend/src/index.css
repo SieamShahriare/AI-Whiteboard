@@ -76,6 +76,68 @@
   --sidebar-ring: oklch(0.552 0.016 285.938);
 }
 
+.prose code, .prose pre {
+  font-family: 'Roboto Mono', monospace;
+  background: #f5f5f5;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.MathJax {
+  font-size: 1.1em !important;
+}
+
+.MathJax_Display {
+  margin: 0.5em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+}
+
+.MathJax_Display + .MathJax_Display {
+  margin-top: 1em;
+}
+
+.prose {
+  line-height: 1.6;
+  color: #333;
+  font-size: 1rem;
+}
+
+.prose h2, .prose h3, .prose h4 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  color: #111;
+}
+
+.prose p {
+  margin-bottom: 1em;
+}
+
+.prose ul, .prose ol {
+  margin-bottom: 1em;
+  padding-left: 1.5em;
+}
+
+.prose li {
+  margin-bottom: 0.5em;
+}
+
+.prose strong {
+  font-weight: 600;
+}
+
+.prose em {
+  font-style: italic;
+}
+
+.prose .math {
+  font-size: 1.1em;
+}
+
+
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 import base64
 from io import BytesIO
-from apps.calculator.utils import analyze_image
-from schema import ImageData
+from apps.calculator.utils import analyze_image, get_explanation
+from schema import ImageData, ExplanationRequest
 from PIL import Image
 
 router = APIRouter()
@@ -18,3 +18,11 @@ async def run(data: ImageData):
         data.append(response)
     print('response in route: ', response)
     return {"message": "Image processed", "data": data, "status": "success"}
+
+@router.post('/explain')
+async def explain(data: ExplanationRequest):
+    image_data = base64.b64decode(data.image.split(",")[1])
+    image_bytes = BytesIO(image_data)
+    image = Image.open(image_bytes)
+    explanation = get_explanation(image, data.question, data.history)
+    return {"message": "Explanation generated", "data": explanation, "status": "success"}
