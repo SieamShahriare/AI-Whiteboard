@@ -87,19 +87,19 @@ Before running the project, ensure you have the following installed:
    python main.py
    ```
    
-   The backend API will start running on `http://localhost:8000` (or your configured port).
+   The backend API will start running on `http://localhost:8900` (or your configured port).
 
 #### Start Frontend Development Server
 
 2. **In a new terminal, start the frontend**
    ```bash
-   cd frontend
-   npm start
+   cd ai-whiteboard-frontend
+   npm run dev
    # Or using yarn:
    # yarn start
    ```
    
-   The frontend will start running on `http://localhost:3000` and automatically open in your browser.
+   The frontend will start running on `http://localhost:5173` and automatically open in your browser.
 
 #### Production Build (Optional)
 
@@ -161,7 +161,7 @@ AI-Whiteboard/
 
 ## 🎯 How to Use
 
-1. **Access the Application**: Open your browser and navigate to `http://localhost:3000`
+1. **Access the Application**: Open your browser and navigate to `http://localhost:5173`
 2. **Start Drawing**: Use your mouse or touch input to draw on the whiteboard
 3. **Adjust Brush Settings**: 
    - Select different colors from the color palette
@@ -189,40 +189,13 @@ AI-Whiteboard/
 ```env
 GEMINI_API_KEY=your_gemini_api_key
 PORT=8000
-CORS_ORIGINS=http://localhost:3000
+CORS_ORIGINS=http://localhost:5173
 ```
 
 **Frontend (.env.local)**:
 ```env
-REACT_APP_API_URL=http://localhost:8000
-REACT_APP_WS_URL=ws://localhost:8000/ws
+REACT_APP_API_URL=http://localhost:8900
 ```
-
-## 🤝 Contributing
-
-We welcome contributions to improve the AI Whiteboard! Here's how you can help:
-
-1. **Fork the repository**
-2. **Create a feature branch**
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-3. **Make your changes and commit**
-   ```bash
-   git commit -m 'Add some amazing feature'
-   ```
-4. **Push to the branch**
-   ```bash
-   git push origin feature/amazing-feature
-   ```
-5. **Open a Pull Request**
-
-### Contribution Guidelines
-
-- Follow Python PEP 8 style guidelines
-- Add comments for complex functionality
-- Update documentation for new features
-- Test your changes thoroughly
 
 ## 🐛 Issues and Bug Reports
 
@@ -243,21 +216,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Sieam Shahriare**
 - GitHub: [@SieamShahriare](https://github.com/SieamShahriare)
-
-## 🙏 Acknowledgments
-
-- Thanks to the open-source community for inspiration and resources
-- AI/ML libraries and frameworks that power the intelligent features
-- Contributors who help improve this project
-
-## 📞 Support
-
-If you find this project helpful, please consider:
-- ⭐ Starring the repository
-- 🐛 Reporting bugs
-- 💡 Suggesting new features
-- 🤝 Contributing to the codebase
-
----
 
 **Happy Drawing! 🎨**
