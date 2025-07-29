@@ -3,7 +3,7 @@ import { ColorSwatch, Group } from "@mantine/core";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
 import { SWATCHES } from "./constants";
-import LatexRenderer from '@/components/LatexRenderer';
+import LatexRenderer from "@/components/LatexRenderer";
 
 interface Response {
   expr: string;
@@ -24,7 +24,7 @@ interface Action {
 }
 
 interface ChatMessage {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
 }
 
@@ -198,6 +198,60 @@ export default function Home() {
     setReset(false);
   };
 
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    // e.preventDefault();
+
+    // const canvas = canvasRef.current;
+    // if (canvas) {
+    //   canvas.style.background = "white";
+    // }
+    const touch = e.touches[0];
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+
+    setIsDrawing(true);
+    setLastPos({ x, y });
+    setDrawingActions((prev) => prev.slice(0, actionIndex + 1));
+    setActionIndex((prev) => prev + 1);
+    setDrawingActions((prev) => [...prev, { lines: [] }]);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    // e.preventDefault();
+    if (!isDrawing || !lastPos) return;
+
+    const touch = e.touches[0];
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+
+    const newLine: Line = {
+      startX: lastPos.x,
+      startY: lastPos.y,
+      endX: x,
+      endY: y,
+      color,
+    };
+
+    setDrawingActions((prev) => {
+      const updated = [...prev];
+      if (updated[actionIndex]) {
+        updated[actionIndex] = {
+          lines: [...updated[actionIndex].lines, newLine],
+        };
+      }
+      return updated;
+    });
+    setLastPos({ x, y });
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    setIsDrawing(false);
+    setLastPos(null);
+  };
+
   useEffect(() => {
     if (reset) {
       resetCanvas();
@@ -267,13 +321,12 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Error calculating:", error);
-    }finally {
-        setIsLoading(false);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-
-    const getExplanation = async () => {
+  const getExplanation = async () => {
     const canvas = canvasRef.current;
     if (!canvas || isLoading) return;
 
@@ -292,11 +345,11 @@ export default function Home() {
       });
 
       const newMessage: ChatMessage = {
-        role: 'assistant',
-        content: response.data.data
+        role: "assistant",
+        content: response.data.data,
       };
 
-      setChatMessages(prev => [...prev, newMessage]);
+      setChatMessages((prev) => [...prev, newMessage]);
       setExplanation(response.data.data);
     } catch (error) {
       console.error("Error getting explanation:", error);
@@ -309,10 +362,10 @@ export default function Home() {
     if (!userQuestion.trim()) return;
 
     const newUserMessage: ChatMessage = {
-      role: 'user',
-      content: userQuestion
+      role: "user",
+      content: userQuestion,
     };
-    setChatMessages(prev => [...prev, newUserMessage]);
+    setChatMessages((prev) => [...prev, newUserMessage]);
     setUserQuestion("");
 
     const canvas = canvasRef.current;
@@ -332,10 +385,10 @@ export default function Home() {
       });
 
       const newAssistantMessage: ChatMessage = {
-        role: 'assistant',
-        content: response.data.data
+        role: "assistant",
+        content: response.data.data,
       };
-      setChatMessages(prev => [...prev, newAssistantMessage]);
+      setChatMessages((prev) => [...prev, newAssistantMessage]);
       setExplanation(response.data.data);
       console.log(explanation);
     } catch (error) {
@@ -345,7 +398,7 @@ export default function Home() {
     }
   };
 
-return (
+  return (
     <div className="min-h-screen bg-gray-50">
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center z-50">
@@ -383,7 +436,9 @@ return (
                 variant="outline"
                 disabled={isLoading}
               >
-                <span className="font-medium">{sidebarOpen ? "Hide" : "Show"} Explanation</span>
+                <span className="font-medium">
+                  {sidebarOpen ? "Hide" : "Show"} Explanation
+                </span>
               </Button>
             </div>
 
@@ -411,6 +466,7 @@ return (
               </Button>
               <Button
                 onClick={runRoute}
+                onTouchEnd={runRoute}
                 className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
                 disabled={isLoading}
               >
@@ -431,15 +487,19 @@ return (
               onMouseMove={draw}
               onMouseUp={stopDrawing}
               onMouseOut={stopDrawing}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
             />
           </div>
         </div>
 
         {/* Sidebar */}
         {sidebarOpen && (
-
-          <div className="w-96 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col" 
-              style={{ height: 'calc(100vh - 180px)' }}>
+          <div
+            className="w-96 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col"
+            style={{ height: "calc(100vh - 180px)" }}
+          >
             <div className="p-4 border-b border-gray-200">
               <h3 className="font-semibold text-lg">Explanation</h3>
             </div>
@@ -449,10 +509,11 @@ return (
                   <LatexRenderer content={explanation} />
                 </div>
               ) : (
-                <p className="text-gray-500">Click "Explain" to get an explanation of the solution</p>
+                <p className="text-gray-500">
+                  Click "Explain" to get an explanation of the solution
+                </p>
               )}
             </div>
-    
 
             {/* Chat interface - stays fixed at the bottom */}
             <div className="p-4 border-t border-gray-200">
@@ -463,7 +524,7 @@ return (
                   onChange={(e) => setUserQuestion(e.target.value)}
                   placeholder="Ask about the solution..."
                   className="flex-1 border border-gray-300 rounded px-3 py-2"
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                 />
                 <Button
                   onClick={handleSendMessage}

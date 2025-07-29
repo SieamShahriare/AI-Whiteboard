@@ -32,10 +32,7 @@ def analyze_image(img: Image, dict_of_vars: dict):
         f"Here is a dictionary of user-assigned variables. If the given expression has any of these variables, use its actual value from this dictionary accordingly: {dict_of_vars_str}. "
         f"DO NOT USE BACKTICKS OR MARKDOWN FORMATTING. "
         f"PROPERLY QUOTE THE KEYS AND VALUES IN THE DICTIONARY FOR EASIER PARSING WITH Python's ast.literal_eval."
-        f"IMPORTANT: Return all mathematical expressions in LaTeX format:\n"
-        f"- Inline math with single dollar signs: $x^2 + y^2 = z^2$\n"
-        f"- Display math with double dollar signs: $$\\frac{1}{2}$$\n"
-        f"- Use proper LaTeX notation for all symbols\n"
+        
     )
     response = model.generate_content([prompt, img])
     print(response.text)
