@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import axios from "axios";
 import { SWATCHES } from "./constants";
 import LatexRenderer from "@/components/LatexRenderer";
+import { PlusIcon } from "@heroicons/react/24/outline";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 interface Response {
   expr: string;
@@ -28,30 +31,44 @@ interface ChatMessage {
   content: string;
 }
 
+interface Page {
+  id: string;
+  drawingActions: Action[];
+  actionIndex: number;
+  answers: { x: number; y: number; text: string }[];
+  dictOfVars: Record<string, string>;
+  title: string;
+}
+
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [isEraser, setIsEraser] = useState(false);
   const [color, setColor] = useState("rgb(255, 255, 255)");
-  const [reset, setReset] = useState(false);
-  const [dictOfVars, setDictOfVars] = useState({});
-  const [drawingActions, setDrawingActions] = useState<Action[]>([]);
-  const [actionIndex, setActionIndex] = useState(-1);
-  const [answers, setAnswers] = useState<
-    { x: number; y: number; text: string }[]
-  >([]);
+  const [pages, setPages] = useState<Page[]>([
+    {
+      id: 'page-1',
+      drawingActions: [],
+      actionIndex: -1,
+      answers: [],
+      dictOfVars: {},
+      title: 'Page 1'
+    }
+  ]);
+  const [currentPageId, setCurrentPageId] = useState<string>('page-1');
   const [lastPos, setLastPos] = useState<{ x: number; y: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [explanation, setExplanation] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [userQuestion, setUserQuestion] = useState("");
   const [isExplaining, setIsExplaining] = useState(false);
 
+  const currentPage = pages.find(page => page.id === currentPageId) || pages[0];
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) {
-      // Set the canvas width/height attributes to match the displayed size
       const resize = () => {
         const rect = canvas.getBoundingClientRect();
         canvas.width = rect.width;
@@ -59,14 +76,15 @@ export default function Home() {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.lineCap = "round";
-          ctx.lineWidth = 8; // Set brush thickness here
+          ctx.lineWidth = 8;
+          ctx.fillStyle = "rgb(248, 250, 252)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
         redrawCanvas();
       };
       resize();
       window.addEventListener("resize", resize);
 
-      // Set up keyboard shortcuts
       const handleKeyDown = (e: KeyboardEvent) => {
         if ((e.ctrlKey || e.metaKey) && e.key === "z") {
           e.preventDefault();
@@ -83,14 +101,11 @@ export default function Home() {
         window.removeEventListener("keydown", handleKeyDown);
       };
     }
-    // eslint-disable-next-line
-  }, [actionIndex, drawingActions, dictOfVars, answers]);
+  }, [currentPageId, pages]);
 
-  // Redraw canvas when actions or answers change
   useEffect(() => {
     redrawCanvas();
-    // eslint-disable-next-line
-  }, [drawingActions, actionIndex, answers]);
+  }, [currentPageId, pages]);
 
   const redrawCanvas = () => {
     const canvas = canvasRef.current;
@@ -98,12 +113,11 @@ export default function Home() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Clear the entire canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "rgb(248, 250, 252)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Redraw all drawing actions
-    for (let i = 0; i <= actionIndex; i++) {
-      const action = drawingActions[i];
+    for (let i = 0; i <= currentPage.actionIndex; i++) {
+      const action = currentPage.drawingActions[i];
       if (action) {
         action.lines.forEach((line: Line) => {
           ctx.strokeStyle = line.color;
@@ -115,36 +129,31 @@ export default function Home() {
       }
     }
 
-    // Redraw all answers (persistent)
-    answers.forEach((answer) => {
-      ctx.font =
-        'bold 40px "Inter", -apple-system, BlinkMacSystemFont, sans-serif';
+    currentPage.answers.forEach((answer) => {
+      ctx.font = 'bold 40px "Inter", -apple-system, BlinkMacSystemFont, sans-serif';
       ctx.fillStyle = "#3b82f6";
       ctx.fillText(answer.text, answer.x, answer.y);
     });
   };
 
-  const resetCanvas = () => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-    }
-    setAnswers([]);
-  };
-
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (canvas) {
-      canvas.style.background = "white";
-    }
+    if (canvas) canvas.style.background = "white";
+    
     setIsDrawing(true);
     setLastPos({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY });
-    setDrawingActions((prev) => prev.slice(0, actionIndex + 1));
-    setActionIndex((prev) => prev + 1);
-    setDrawingActions((prev) => [...prev, { lines: [] }]);
+    
+    setPages(prevPages => 
+      prevPages.map(page => 
+        page.id === currentPageId
+          ? {
+              ...page,
+              drawingActions: page.drawingActions.slice(0, page.actionIndex + 1),
+              actionIndex: page.actionIndex + 1,
+            }
+          : page
+      )
+    );
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -157,18 +166,27 @@ export default function Home() {
       startY: lastPos.y,
       endX: x,
       endY: y,
-      color,
+      color: isEraser ? "rgb(248, 250, 252)" : color,
     };
 
-    setDrawingActions((prev) => {
-      const updated = [...prev];
-      if (updated[actionIndex]) {
-        updated[actionIndex] = {
-          lines: [...updated[actionIndex].lines, newLine],
-        };
-      }
-      return updated;
-    });
+    setPages(prevPages => 
+      prevPages.map(page => 
+        page.id === currentPageId
+          ? {
+              ...page,
+              drawingActions: [
+                ...page.drawingActions.slice(0, page.actionIndex),
+                {
+                  lines: [
+                    ...(page.drawingActions[page.actionIndex]?.lines || []),
+                    newLine
+                  ]
+                }
+              ]
+            }
+          : page
+      )
+    );
     setLastPos({ x, y });
   };
 
@@ -178,9 +196,13 @@ export default function Home() {
   };
 
   const undo = () => {
-    if (actionIndex >= 0) {
-      setActionIndex((prev) => prev - 1);
-    }
+    setPages(prevPages => 
+      prevPages.map(page => 
+        page.id === currentPageId && page.actionIndex >= 0
+          ? { ...page, actionIndex: page.actionIndex - 1 }
+          : page
+      )
+    );
   };
 
   const clear = () => {
@@ -188,23 +210,26 @@ export default function Home() {
     if (canvas) {
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "rgb(248, 250, 252)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
     }
-    setDrawingActions([]);
-    setActionIndex(-1);
-    setDictOfVars({});
-    setAnswers([]);
-    setReset(false);
+    setPages(prevPages => 
+      prevPages.map(page => 
+        page.id === currentPageId
+          ? {
+              ...page,
+              drawingActions: [],
+              actionIndex: -1,
+              dictOfVars: {},
+              answers: []
+            }
+          : page
+      )
+    );
   };
 
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    // e.preventDefault();
-
-    // const canvas = canvasRef.current;
-    // if (canvas) {
-    //   canvas.style.background = "white";
-    // }
     const touch = e.touches[0];
     const rect = e.currentTarget.getBoundingClientRect();
     const x = touch.clientX - rect.left;
@@ -212,13 +237,21 @@ export default function Home() {
 
     setIsDrawing(true);
     setLastPos({ x, y });
-    setDrawingActions((prev) => prev.slice(0, actionIndex + 1));
-    setActionIndex((prev) => prev + 1);
-    setDrawingActions((prev) => [...prev, { lines: [] }]);
+    
+    setPages(prevPages => 
+      prevPages.map(page => 
+        page.id === currentPageId
+          ? {
+              ...page,
+              drawingActions: page.drawingActions.slice(0, page.actionIndex + 1),
+              actionIndex: page.actionIndex + 1,
+            }
+          : page
+      )
+    );
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    // e.preventDefault();
     if (!isDrawing || !lastPos) return;
 
     const touch = e.touches[0];
@@ -231,18 +264,27 @@ export default function Home() {
       startY: lastPos.y,
       endX: x,
       endY: y,
-      color,
+      color: isEraser ? "rgb(248, 250, 252)" : color,
     };
 
-    setDrawingActions((prev) => {
-      const updated = [...prev];
-      if (updated[actionIndex]) {
-        updated[actionIndex] = {
-          lines: [...updated[actionIndex].lines, newLine],
-        };
-      }
-      return updated;
-    });
+    setPages(prevPages => 
+      prevPages.map(page => 
+        page.id === currentPageId
+          ? {
+              ...page,
+              drawingActions: [
+                ...page.drawingActions.slice(0, page.actionIndex),
+                {
+                  lines: [
+                    ...(page.drawingActions[page.actionIndex]?.lines || []),
+                    newLine
+                  ]
+                }
+              ]
+            }
+          : page
+      )
+    );
     setLastPos({ x, y });
   };
 
@@ -252,16 +294,42 @@ export default function Home() {
     setLastPos(null);
   };
 
-  useEffect(() => {
-    if (reset) {
-      resetCanvas();
-      setDrawingActions([]);
-      setActionIndex(-1);
-      setDictOfVars({});
-      setAnswers([]);
-      setReset(false);
-    }
-  }, [reset]);
+  const addNewPage = () => {
+    const newPageId = `page-${Date.now()}`;
+    setPages(prev => [
+      ...prev,
+      {
+        id: newPageId,
+        drawingActions: [],
+        actionIndex: -1,
+        answers: [],
+        dictOfVars: {},
+        title: `Page ${prev.length + 1}`
+      }
+    ]);
+    setCurrentPageId(newPageId);
+  };
+
+  const switchPage = (pageId: string) => {
+    setCurrentPageId(pageId);
+    redrawCanvas();
+  };
+
+  const deletePage = (pageId: string) => {
+    if (pages.length <= 1) return;
+    
+    setPages(prev => {
+      const newPages = prev.filter(page => page.id !== pageId);
+      if (pageId === currentPageId) {
+        const currentIndex = prev.findIndex(p => p.id === pageId);
+        const newCurrentId = currentIndex > 0 
+          ? prev[currentIndex - 1].id 
+          : newPages[0]?.id;
+        setCurrentPageId(newCurrentId);
+      }
+      return newPages;
+    });
+  };
 
   const runRoute = async () => {
     const canvas = canvasRef.current;
@@ -275,7 +343,7 @@ export default function Home() {
         url: "http://localhost:8900/calculate",
         data: {
           image: canvas.toDataURL("image/png"),
-          dict_of_vars: dictOfVars,
+          dict_of_vars: currentPage.dictOfVars,
         },
       });
 
@@ -288,10 +356,20 @@ export default function Home() {
           newVars[data.expr] = data.result;
         }
       });
-      setDictOfVars((prev) => ({ ...prev, ...newVars }));
 
-      if (drawingActions.length > 0 && actionIndex >= 0) {
-        const lastAction = drawingActions[actionIndex];
+      setPages(prevPages => 
+        prevPages.map(page => 
+          page.id === currentPageId
+            ? {
+                ...page,
+                dictOfVars: { ...page.dictOfVars, ...newVars }
+              }
+            : page
+        )
+      );
+
+      if (currentPage.drawingActions.length > 0 && currentPage.actionIndex >= 0) {
+        const lastAction = currentPage.drawingActions[currentPage.actionIndex];
         if (lastAction && lastAction.lines.length > 0) {
           let minX = Infinity,
             minY = Infinity,
@@ -308,15 +386,23 @@ export default function Home() {
           const answerX = maxX + 50;
           const answerY = (minY + maxY) / 2;
 
-          setAnswers((prev) => [
-            ...prev,
-            ...res.data.map((data: Response) => ({
-              x: answerX,
-              y: answerY,
-              text: data.result,
-              equationId: actionIndex,
-            })),
-          ]);
+          setPages(prevPages => 
+            prevPages.map(page => 
+              page.id === currentPageId
+                ? {
+                    ...page,
+                    answers: [
+                      ...page.answers,
+                      ...res.data.map((data: Response) => ({
+                        x: answerX,
+                        y: answerY,
+                        text: data.result,
+                      }))
+                    ]
+                  }
+                : page
+            )
+          );
         }
       }
     } catch (error) {
@@ -390,11 +476,97 @@ export default function Home() {
       };
       setChatMessages((prev) => [...prev, newAssistantMessage]);
       setExplanation(response.data.data);
-      console.log(explanation);
     } catch (error) {
       console.error("Error in chat:", error);
     } finally {
       setIsExplaining(false);
+    }
+  };
+
+  const exportToPDF = async () => {
+    setIsLoading(true);
+    
+    try {
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const margin = 10; // mm margin
+      const pageWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+      
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        setCurrentPageId(page.id);
+        
+        // Wait for the canvas to update
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const canvas = canvasRef.current;
+        if (!canvas) continue;
+        
+        // Create a temporary container to render the canvas with proper dimensions
+        const tempContainer = document.createElement('div');
+        tempContainer.style.width = `${pageWidth}mm`;
+        tempContainer.style.height = 'auto';
+        tempContainer.style.position = 'absolute';
+        tempContainer.style.left = '-9999px';
+        document.body.appendChild(tempContainer);
+        
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const ctx = tempCanvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = "rgb(248, 250, 252)";
+          ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+          
+          // Redraw the current page on the temp canvas
+          for (let j = 0; j <= page.actionIndex; j++) {
+            const action = page.drawingActions[j];
+            if (action) {
+              action.lines.forEach((line: Line) => {
+                ctx.strokeStyle = line.color;
+                ctx.beginPath();
+                ctx.moveTo(line.startX, line.startY);
+                ctx.lineTo(line.endX, line.endY);
+                ctx.stroke();
+              });
+            }
+          }
+          
+          // Draw answers
+          page.answers.forEach((answer) => {
+            ctx.font = 'bold 40px "Inter", -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = "#3b82f6";
+            ctx.fillText(answer.text, answer.x, answer.y);
+          });
+        }
+        
+        tempContainer.appendChild(tempCanvas);
+        
+        // Convert to image
+        const canvasData = await html2canvas(tempCanvas, {
+          scale: 2,
+          logging: false,
+          useCORS: true,
+        });
+        
+        document.body.removeChild(tempContainer);
+        
+        const imgData = canvasData.toDataURL('image/png');
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfHeight = (imgProps.height * pageWidth) / imgProps.width;
+        
+        if (i > 0) {
+          pdf.addPage();
+        }
+        
+        pdf.text(`Page ${i + 1}: ${page.title}`, margin, margin);
+        pdf.addImage(imgData, 'PNG', margin, margin + 5, pageWidth, pdfHeight);
+      }
+    
+      pdf.save('math-notebook.pdf');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -408,9 +580,48 @@ export default function Home() {
           </div>
         </div>
       )}
-      <div className="container mx-auto px-4 py-4 flex">
-        {/* Main content */}
-        <div className="flex-1 mr-4">
+      <div className="container mx-auto px-0 flex h-[calc(100vh-4rem)]">
+        {/* Pages sidebar */}
+        <div className="w-16 bg-gray-100 border-r border-gray-200 flex flex-col items-center py-4 space-y-2">
+          {pages.map(page => (
+            <button
+              key={page.id}
+              onClick={() => switchPage(page.id)}
+              className={`w-12 h-12 rounded-lg flex items-center justify-center text-sm font-medium
+                ${currentPageId === page.id 
+                  ? 'bg-blue-100 text-blue-600 border border-blue-300' 
+                  : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+                }`}
+            >
+              {pages.findIndex(p => p.id === page.id) + 1}
+            </button>
+          ))}
+          
+          <button
+            onClick={addNewPage}
+            className="w-12 h-12 rounded-lg flex items-center justify-center 
+                      bg-white text-gray-500 hover:bg-gray-50 border border-gray-200 
+                      hover:text-blue-500 mt-4"
+          >
+            <PlusIcon className="w-5 h-5" />
+          </button>
+
+          {pages.length > 1 && (
+            <button
+              onClick={() => deletePage(currentPageId)}
+              className="w-12 h-12 rounded-lg flex items-center justify-center 
+                        bg-white text-red-500 hover:bg-gray-50 border border-gray-200 
+                        hover:text-red-600 mt-4"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Main content area */}
+        <div className="flex-1 flex flex-col">
           <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
             <div className="flex items-center gap-2">
               <Button
@@ -429,6 +640,22 @@ export default function Home() {
               >
                 <span className="font-medium">Undo</span>
                 <span className="ml-2 text-xs text-gray-500">(Ctrl+Z)</span>
+              </Button>
+              <Button
+                onClick={() => setIsEraser(!isEraser)}
+                className={`${isEraser ? 'bg-gray-200' : 'bg-white'} text-gray-800 hover:bg-gray-100 border border-gray-300 shadow-sm`}
+                variant="outline"
+                disabled={isLoading}
+              >
+                <span className="font-medium">Eraser</span>
+              </Button>
+              <Button
+                onClick={exportToPDF}
+                className="bg-white text-gray-800 hover:bg-gray-100 border border-gray-300 shadow-sm"
+                variant="outline"
+                disabled={isLoading}
+              >
+                <span className="font-medium">Export PDF</span>
               </Button>
               <Button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -478,11 +705,11 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="relative bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="relative bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex-1">
             <canvas
               ref={canvasRef}
               id="canvas"
-              className="w-full h-[calc(100vh-180px)]"
+              className="w-full h-full"
               onMouseDown={startDrawing}
               onMouseMove={draw}
               onMouseUp={stopDrawing}
@@ -515,7 +742,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* Chat interface - stays fixed at the bottom */}
+            {/* Chat interface */}
             <div className="p-4 border-t border-gray-200">
               <div className="flex gap-2">
                 <input

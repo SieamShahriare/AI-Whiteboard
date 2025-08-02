@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@mantine/core": "^8.2.1",
     "@mantine/hooks": "^8.2.1",
     "@radix-ui/react-label": "^2.1.7",
@@ -22,12 +23,15 @@
     "better-react-mathjax": "^2.3.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.1",
     "lucide-react": "^0.526.0",
     "mathjax": "^3.2.2",
     "mathjax-full": "^3.2.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-draggable": "^4.5.0",
+    "react-icons": "^5.5.0",
     "react-router-dom": "^7.7.1",
     "tailwind-merge": "^3.3.1"
   },
